@@ -527,6 +527,14 @@ def simulation_to_xlsx(simulation, filename):
 
         return c, p
 
+    def write_sim_matrix(worksheet, startrow, startcol, matrix, cformat):
+        avg = matrix["avg"]
+        std = matrix["std"]
+        for c in range(len(avg)):
+            for p in range(len(avg[c])):
+                worksheet.write(startrow+2*c, startcol+p, avg[c][p], cformat)
+                worksheet.write(startrow+2*c+1, startcol+p, std[c][p], cformat)
+
     def draw_block(worksheet, row, col, heading, matrix, cformat=cell_format):
         xheaders = parties
         yheaders = const_names
@@ -538,13 +546,28 @@ def simulation_to_xlsx(simulation, filename):
         worksheet.write_column(row+2, col, yheaders, cell_format)
         write_matrix(worksheet, row+2, col+1, matrix, cformat)
 
+    def draw_sim_block(worksheet, row, col, heading, matrix, cformat=cell_format):
+        xheaders = parties
+        yheaders = const_names
+        if heading.endswith("shares"):
+            cformat = share_format
+        worksheet.merge_range(row, col, row, col+1+len(xheaders), heading,
+                                h_format)
+        worksheet.write_row(row+1, col+2, xheaders, cell_format)
+        r=row+2
+        for header in yheaders:
+            worksheet.merge_range(r, col, r+1, col, header, cell_format)
+            worksheet.write_column(r, col+1, ["avg", "std"], cell_format)
+            r += 2
+        write_sim_matrix(worksheet, row+2, col+2, matrix, cformat)
+
     categories = [
         {"abbr": "base", "cell_format": int_format,
          "heading": "Reference data"                     },
         {"abbr": "avg",  "cell_format": sim_format,
          "heading": "Averages from simulation"           },
-        {"abbr": "std",  "cell_format": sim_format,
-         "heading": "Standard deviations from simulation"},
+        # {"abbr": "std",  "cell_format": sim_format,
+        #  "heading": "Standard deviations from simulation"},
     ]
     tables = [
         {"abbr": "v",  "heading": "Votes"             },
@@ -586,18 +609,40 @@ def simulation_to_xlsx(simulation, filename):
                 "ts": simulation.list_data[r]["total_seats"]["std"],
                 "ss": simulation.list_data[r]["seat_shares"]["std"],
             },
+            "sim": {
+                "v" : simulation.list_data[-1]["sim_votes"],
+                "vs": simulation.list_data[-1]["sim_shares"],
+                "cs": simulation.list_data[r]["const_seats"],
+                "as": simulation.list_data[r]["adj_seats"],
+                "ts": simulation.list_data[r]["total_seats"],
+                "ss": simulation.list_data[r]["seat_shares"],
+            }
         }
         toprow = 3
         for category in categories:
             worksheet.merge_range(toprow, 0, toprow+1+len(const_names), 0,
                 category["heading"], r_format)
-            col = 2
+            col = 3
             for table in tables:
                 draw_block(worksheet, toprow, col, table["heading"],
                     data_matrix[category["abbr"]][table["abbr"]],
                     category["cell_format"])
-                col += len(parties)+2
+                col += len(parties)+3
             toprow += len(const_names)+3
+
+        category = {
+            "abbr": "sim",  "cell_format": sim_format,
+             "heading": "Simulated averages with standard deviations"
+        }
+        worksheet.merge_range(toprow, 0, toprow+1+2*len(const_names), 0,
+            category["heading"], r_format)
+        col = 2
+        for table in tables:
+            draw_sim_block(worksheet, toprow, col, table["heading"],
+                data_matrix[category["abbr"]][table["abbr"]],
+                category["cell_format"])
+            col += len(parties)+3
+        toprow += 2*len(const_names)+3
 
     workbook.close()
 
